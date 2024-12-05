@@ -313,6 +313,70 @@ body {
     getTasks();
   }
 
+  // Add a new function to create notifications for tasks and reminders
+  function createNotificationForTask(taskText, dueDate) {
+    // Check if notifications are supported
+    if (!("Notification" in window)) {
+      console.log("This browser does not support desktop notification");
+      return;
+    }
+
+    // Check whether notification permissions have already been granted
+    if (Notification.permission === "granted") {
+      // If it's okay let's create a notification
+      const notification = new Notification("Recordatorio de Tarea", {
+        body: taskText,
+        icon: "https://images.websim.ai/avatar/tasklist.png", // A generic task icon
+        tag: 'task-reminder' // Used to replace existing notifications
+      });
+
+      // Optional: Add click handler
+      notification.onclick = function() {
+        window.focus(); // Focus the window
+        this.close(); // Close the notification
+      };
+
+      // Automatically close the notification after 10 seconds
+      setTimeout(() => {
+        notification.close();
+      }, 10000);
+    }
+    // Otherwise, request permission
+    else if (Notification.permission !== "denied") {
+      Notification.requestPermission().then(function (permission) {
+        // If the user accepts, let's create a notification
+        if (permission === "granted") {
+          createNotificationForTask(taskText, dueDate);
+        }
+      });
+    }
+  }
+
+  // Modify the existing addTask function to trigger notifications
+  function addTask() {
+    const taskInput = document.getElementById('taskInput');
+    const taskDateInput = document.getElementById('taskDate');
+    const taskText = taskInput.value.trim();
+    const taskDate = taskDateInput.value;
+
+    if (taskText !== '') {
+      db.collection('tasks').add({
+        text: `📝 Tarea: ${taskText}`,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        isReminder: false,
+        dueDate: taskDate ? new Date(taskDate).toISOString() : null
+      }).then((docRef) => {
+        // Create a notification for the task
+        createNotificationForTask(taskText, taskDate);
+        
+        taskInput.value = '';
+        taskDateInput.value = '';
+        getTasks();
+      }).catch(error => console.error("Error adding task: ", error));
+    }
+  }
+
+  // Also modify the note adding process to support notifications
   function addNote() {
     const noteInput = document.getElementById('noteInput');
     const noteText = noteInput.value.trim();
@@ -324,15 +388,20 @@ body {
         hasReminder: hasReminder,
         timestamp: firebase.firestore.FieldValue.serverTimestamp()
       }).then((docRef) => {
-        // If the note has a reminder, add it to tasks
+        // If the note has a reminder, add it to tasks and create a notification
         if (hasReminder) {
-          db.collection('tasks').add({
+          const reminderTask = {
             text: `📌 Recordatorio: ${noteText}`,
             timestamp: firebase.firestore.FieldValue.serverTimestamp(),
             isReminder: true,
             originalNoteId: docRef.id,
             dueDate: null
-          });
+          };
+
+          db.collection('tasks').add(reminderTask);
+          
+          // Create a notification for the reminder
+          createNotificationForTask(reminderTask.text);
         }
         
         noteInput.value = '';
@@ -341,6 +410,19 @@ body {
       }).catch(error => console.error("Error adding note: ", error));
     }
   }
+
+  // Ensure notification permission is requested on page load
+  document.addEventListener('DOMContentLoaded', function() {
+    if (!("Notification" in window)) {
+      console.log("This browser does not support desktop notification");
+      return;
+    }
+
+    // Request permission if not already granted
+    if (Notification.permission !== "granted") {
+      Notification.requestPermission();
+    }
+  });
 
   function loadNotes() {
     const notesList = document.getElementById('notesList');
@@ -418,32 +500,15 @@ body {
       });
   }
 
-  function addTask() {
-    const taskInput = document.getElementById('taskInput');
-    const taskDateInput = document.getElementById('taskDate');
-    const taskText = taskInput.value.trim();
-    const taskDate = taskDateInput.value;
+  document.addEventListener('DOMContentLoaded', requestNotificationPermission);
 
-    if (taskText !== '') {
-      db.collection('tasks').add({
-        text: `📝 Tarea: ${taskText}`,
-        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-        isReminder: false,
-        dueDate: taskDate ? new Date(taskDate).toISOString() : null
-      }).then((docRef) => {
-        // Send notification for the task
-        sendTaskNotification(taskText, taskDate);
-        
-        taskInput.value = '';
-        taskDateInput.value = '';
+  function deleteTask(taskId) {
+    db.collection("tasks").doc(taskId).delete()
+      .then(() => {
         getTasks();
-      }).catch(error => console.error("Error adding task: ", error));
-    }
-  }
-
-  function sendTaskNotification(taskText, dueDate) {
-    // This would typically be done server-side in a real application
-    console.log('Sending task notification:', taskText, dueDate);
+      }).catch((error) => {
+        console.error("Error al eliminar tarea: ", error);
+      });
   }
 
   function getTasks() {
@@ -474,17 +539,6 @@ body {
           `;
           taskListItems.appendChild(listItem);
         });
-      });
-  }
-
-  document.addEventListener('DOMContentLoaded', requestNotificationPermission);
-
-  function deleteTask(taskId) {
-    db.collection("tasks").doc(taskId).delete()
-      .then(() => {
-        getTasks();
-      }).catch((error) => {
-        console.error("Error al eliminar tarea: ", error);
       });
   }
 
