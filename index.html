@@ -405,33 +405,43 @@ body {
           taskListItems.appendChild(listItem);
 
           // Check for notifications
-          if (taskData.dueDate) {
-            checkTaskNotification(doc.id, taskData);
-          }
+          checkTaskNotification(doc.id, taskData);
         });
       });
   }
 
+  function requestNotificationPermission() {
+    if ('Notification' in window) {
+      Notification.requestPermission().then(function (permission) {
+        if (permission === 'granted') {
+          console.log('Notification permission granted');
+        }
+      });
+    }
+  }
+
   function checkTaskNotification(taskId, taskData) {
-    const dueDate = new Date(taskData.dueDate);
-    const now = new Date();
-    
-    // Check if the task is due within the next hour
-    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-    
-    if (dueDate <= oneHourFromNow && dueDate > now) {
-      if ('Notification' in window) {
-        Notification.requestPermission().then(function (permission) {
-          if (permission === 'granted') {
-            new Notification('Tarea Próxima', {
-              body: taskData.text,
-              tag: taskId
-            });
-          }
+    // Only attempt to send notification if permission is granted
+    if (Notification.permission === 'granted') {
+      const dueDate = new Date(taskData.dueDate);
+      const now = new Date();
+      
+      // Check if the task is due within the next hour
+      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+      
+      if (dueDate <= oneHourFromNow && dueDate > now) {
+        // Create a native system notification
+        new Notification('Tarea Próxima', {
+          body: taskData.text,
+          tag: taskId,
+          // Optional: Add more options for a richer notification
+          icon: 'path/to/optional/icon.png'
         });
       }
     }
   }
+
+  document.addEventListener('DOMContentLoaded', requestNotificationPermission);
 
   function deleteTask(taskId) {
     db.collection("tasks").doc(taskId).delete()
@@ -440,11 +450,6 @@ body {
       }).catch((error) => {
         console.error("Error al eliminar tarea: ", error);
       });
-  }
-
-  // Request notification permission on page load
-  if ('Notification' in window) {
-    Notification.requestPermission();
   }
 
   // Initial load of tasks and notes
