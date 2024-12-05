@@ -3,9 +3,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mis Planes y Notas</title>
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+<!-- Add Web Push Libraries -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
+<!-- Web Push Script -->
+<script src="https://unpkg.com/web-push@3.6.3/dist/web-push.min.js"></script>
+
+<!-- Existing Styles Remain the Same -->
 <style>
 body {
   font-family: 'Poppins', sans-serif;
@@ -208,6 +213,11 @@ body {
       <button class="add-btn" onclick="addTask()">Añadir Tarea</button>
       <ul id="taskListItems"></ul>
     </section>
+    
+    <!-- Add a button to request notification permissions -->
+    <div id="notification-permission" style="text-align: center; padding: 10px; background-color: #f59eca; color: white;">
+      <button id="enable-notifications" class="nav-button">Habilitar Notificaciones</button>
+    </div>
   </div>
 
   <div id="footer" style="background-color: #e72781; color: white; text-align: center; padding: 1em;">
@@ -229,6 +239,58 @@ body {
 
   firebase.initializeApp(firebaseConfig);
   const db = firebase.firestore();
+
+  // Web Push Notification Setup
+  let publicVapidKey = 'BGtkbcjrO12YMoDuq2sCQeHlu47uPx3SHTgFKZFYiBW8Qr0D9vgyZSZPdw6_4ZFEI9Snk1VEAj2qTYI1I1YxBXE';
+  
+  // Function to request notification permission
+  async function requestNotificationPermission() {
+    try {
+      // Request permission
+      const permission = await Notification.requestPermission();
+      
+      if (permission === 'granted') {
+        // Subscribe to push notifications
+        const registration = await navigator.serviceWorker.register('/service-worker.js');
+        const subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+        });
+
+        // Save subscription to Firestore
+        await db.collection('subscriptions').add({
+          subscription: JSON.stringify(subscription),
+          timestamp: firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+        // Hide permission button
+        document.getElementById('notification-permission').style.display = 'none';
+        
+        alert('Notificaciones habilitadas con éxito!');
+      }
+    } catch (error) {
+      console.error('Error setting up notifications:', error);
+    }
+  }
+
+  // Utility function to convert VAPID key
+  function urlBase64ToUint8Array(base64String) {
+    const padding = '='.repeat((4 - base64String.length % 4) % 4);
+    const base64 = (base64String + padding)
+      .replace(/\-/g, '+')
+      .replace(/_/g, '/');
+
+    const rawData = window.atob(base64);
+    const outputArray = new Uint8Array(rawData.length);
+
+    for (let i = 0; i < rawData.length; ++i) {
+      outputArray[i] = rawData.charCodeAt(i);
+    }
+    return outputArray;
+  }
+
+  // Event listener for notification permission button
+  document.getElementById('enable-notifications').addEventListener('click', requestNotificationPermission);
 
   function showNotes() {
     document.getElementById('notesSection').style.display = 'block';
@@ -368,12 +430,20 @@ body {
         timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         isReminder: false,
         dueDate: taskDate ? new Date(taskDate).toISOString() : null
-      }).then(() => {
+      }).then((docRef) => {
+        // Send notification for the task
+        sendTaskNotification(taskText, taskDate);
+        
         taskInput.value = '';
         taskDateInput.value = '';
         getTasks();
       }).catch(error => console.error("Error adding task: ", error));
     }
+  }
+
+  function sendTaskNotification(taskText, dueDate) {
+    // This would typically be done server-side in a real application
+    console.log('Sending task notification:', taskText, dueDate);
   }
 
   function getTasks() {
@@ -403,42 +473,8 @@ body {
             </div>
           `;
           taskListItems.appendChild(listItem);
-
-          // Check for notifications
-          checkTaskNotification(doc.id, taskData);
         });
       });
-  }
-
-  function requestNotificationPermission() {
-    if ('Notification' in window) {
-      Notification.requestPermission().then(function (permission) {
-        if (permission === 'granted') {
-          console.log('Notification permission granted');
-        }
-      });
-    }
-  }
-
-  function checkTaskNotification(taskId, taskData) {
-    // Only attempt to send notification if permission is granted
-    if (Notification.permission === 'granted') {
-      const dueDate = new Date(taskData.dueDate);
-      const now = new Date();
-      
-      // Check if the task is due within the next hour
-      const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
-      
-      if (dueDate <= oneHourFromNow && dueDate > now) {
-        // Create a native system notification
-        new Notification('Tarea Próxima', {
-          body: taskData.text,
-          tag: taskId,
-          // Optional: Add more options for a richer notification
-          icon: 'path/to/optional/icon.png'
-        });
-      }
-    }
   }
 
   document.addEventListener('DOMContentLoaded', requestNotificationPermission);
@@ -455,6 +491,22 @@ body {
   // Initial load of tasks and notes
   getTasks();
   loadNotes();
+</script>
+
+<!-- Service Worker Script -->
+<script>
+  // Register service worker for push notifications
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('/service-worker.js')
+        .then(registration => {
+          console.log('Service Worker registered:', registration);
+        })
+        .catch(error => {
+          console.log('Service Worker registration failed:', error);
+        });
+    });
+  }
 </script>
 </body>
 </html>
