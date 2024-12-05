@@ -1,0 +1,455 @@
+<html><head><base href="https://websim.ai">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mis Planes y Notas</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body {
+  font-family: 'Poppins', sans-serif;
+  background-color: #f7e0ff;
+  margin: 0;
+  overflow-x: hidden;
+}
+
+#container {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+#header {
+  background: linear-gradient(to right, #e72781, #f59eca);
+  color: white;
+  padding: 1em;
+  text-align: center;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-buttons {
+  display: flex;
+  gap: 10px;
+}
+
+.nav-button {
+  background-color: transparent;
+  border: 2px solid white;
+  color: white;
+  font-size: 0.9em;
+  cursor: pointer;
+  padding: 0.5em 1em;
+  border-radius: 20px;
+  transition: all 0.3s ease;
+}
+
+.nav-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+#main-content {
+  padding: 20px;
+  flex: 1;
+  overflow-y: auto;
+}
+
+#notesSection, #journalSection, #taskList {
+  background-color: white;
+  border-radius: 15px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.note-input, #newEntryText {
+  width: 100%;
+  padding: 10px;
+  margin-bottom: 10px;
+  border: 1px solid #e72781;
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.task-input {
+  width: 100%;
+  display: flex;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.task-input input, .task-input input[type="datetime-local"] {
+  flex-grow: 1;
+  padding: 10px;
+  border: 1px solid #e72781;
+  border-radius: 8px;
+}
+
+.note-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.add-btn, .delete-btn {
+  background-color: #e72781;
+  color: white;
+  border: none;
+  padding: 10px 15px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+
+.add-btn:hover, .delete-btn:hover {
+  background-color: #f59eca;
+}
+
+.note-item, .journal-entry, .task-item {
+  background-color: #f9f0f7;
+  border-radius: 10px;
+  padding: 15px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.task-item {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.task-details {
+  display: flex;
+  justify-content: space-between;
+  width: 100%;
+  align-items: center;
+}
+
+.reminder-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.floating {
+  animation: float 4s ease-in-out infinite;
+}
+
+@keyframes float {
+  0% { transform: translateY(0); }
+  50% { transform: translateY(-20px); }
+  100% { transform: translateY(0); }
+}
+
+.emoji {
+  font-size: 2em;
+  position: absolute;
+  animation: float 6s ease-in-out infinite;
+  user-select: none;
+  z-index: -1;
+}
+
+.emoji:nth-child(1) { top: 20%; left: 10%; animation-delay: 0.5s; }
+.emoji:nth-child(2) { top: 60%; left: 85%; animation-delay: 1s; }
+.emoji:nth-child(3) { bottom: 20%; right: 10%; animation-delay: 1.5s; }
+
+@media (max-width: 768px) {
+  #header { flex-direction: column; }
+  .nav-buttons { margin-top: 10px; }
+}
+</style>
+</head>
+<body>
+<div id="container">
+  <div id="header">
+    <h1>Mis Planes</h1>
+    <div class="nav-buttons">
+      <button class="nav-button" onclick="showNotes()">Notas</button>
+      <button class="nav-button" onclick="showJournal()">Diario</button>
+      <button class="nav-button" onclick="showTasks()">Tareas</button>
+    </div>
+  </div>
+
+  <div id="main-content">
+    <span class="floating emoji">✨</span>
+    <span class="floating emoji">💖</span>
+    <span class="floating emoji">🎉</span>
+
+    <section id="notesSection" style="display:block;">
+      <h2>Mis Notas</h2>
+      <textarea id="noteInput" class="note-input" placeholder="Escribe tu nota aquí..."></textarea>
+      <div class="note-actions">
+        <div class="reminder-toggle">
+          <input type="checkbox" id="reminderToggle">
+          <label for="reminderToggle">Añadir Recordatorio</label>
+        </div>
+        <button class="add-btn" onclick="addNote()">Guardar Nota</button>
+      </div>
+      <ul id="notesList"></ul>
+    </section>
+
+    <section id="journalSection" style="display:none;">
+      <h2>Mi Diario</h2>
+      <textarea id="newEntryText" placeholder="Escribe aquí tu entrada del diario..."></textarea>
+      <button class="add-btn" onclick="addJournalEntry()">Añadir Entrada</button>
+      <ul id="journalEntries"></ul>
+    </section>
+
+    <section id="taskList">
+      <h2>Mis Tareas y Recordatorios</h2>
+      <div class="task-input">
+        <input type="text" id="taskInput" placeholder="Escribe tu tarea...">
+        <input type="datetime-local" id="taskDate">
+      </div>
+      <button class="add-btn" onclick="addTask()">Añadir Tarea</button>
+      <ul id="taskListItems"></ul>
+    </section>
+  </div>
+
+  <div id="footer" style="background-color: #e72781; color: white; text-align: center; padding: 1em;">
+    <p>&copy; 2023 Mis Planes y Notas</p>
+  </div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCyBRfQDFXjusN_aalebWPPIgsm5QWr9fg",
+    authDomain: "oscar-afc2f.firebaseapp.com",
+    databaseURL: "https://oscar-afc2f-default-rtdb.firebaseio.com",
+    projectId: "oscar-afc2f",
+    storageBucket: "oscar-afc2f.firebasestorage.app",
+    messagingSenderId: "205663051008",
+    appId: "1:205663051008:web:b7cfb775523d92895467e5",
+    measurementId: "G-EQL8BZNDHX"
+  };
+
+  firebase.initializeApp(firebaseConfig);
+  const db = firebase.firestore();
+
+  function showNotes() {
+    document.getElementById('notesSection').style.display = 'block';
+    document.getElementById('journalSection').style.display = 'none';
+    document.getElementById('taskList').style.display = 'none';
+    loadNotes();
+  }
+
+  function showJournal() {
+    document.getElementById('notesSection').style.display = 'none';
+    document.getElementById('journalSection').style.display = 'block';
+    document.getElementById('taskList').style.display = 'none';
+    loadJournalEntries();
+  }
+
+  function showTasks() {
+    document.getElementById('notesSection').style.display = 'none';
+    document.getElementById('journalSection').style.display = 'none';
+    document.getElementById('taskList').style.display = 'block';
+    getTasks();
+  }
+
+  function addNote() {
+    const noteInput = document.getElementById('noteInput');
+    const noteText = noteInput.value.trim();
+    const hasReminder = document.getElementById('reminderToggle').checked;
+
+    if (noteText !== '') {
+      db.collection('notes').add({
+        text: noteText,
+        hasReminder: hasReminder,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).then((docRef) => {
+        // If the note has a reminder, add it to tasks
+        if (hasReminder) {
+          db.collection('tasks').add({
+            text: `📌 Recordatorio: ${noteText}`,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+            isReminder: true,
+            originalNoteId: docRef.id,
+            dueDate: null
+          });
+        }
+        
+        noteInput.value = '';
+        loadNotes();
+        getTasks();
+      }).catch(error => console.error("Error adding note: ", error));
+    }
+  }
+
+  function loadNotes() {
+    const notesList = document.getElementById('notesList');
+    notesList.innerHTML = '';
+    
+    db.collection('notes')
+      .orderBy('timestamp', 'desc')
+      .get()
+      .then((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+          const noteData = doc.data();
+          const noteItem = document.createElement('li');
+          noteItem.classList.add('note-item');
+          noteItem.innerHTML = `
+            <span>${noteData.text}</span>
+            <div>
+              ${noteData.hasReminder ? '🔔' : ''}
+              <button class="delete-btn" onclick="deleteNote('${doc.id}')">Eliminar</button>
+            </div>
+          `;
+          notesList.appendChild(noteItem);
+        });
+      });
+  }
+
+  function deleteNote(noteId) {
+    // Delete the note from the notes collection
+    db.collection('notes').doc(noteId).delete()
+      .then(() => {
+        // Also delete any associated tasks/reminders
+        db.collection('tasks')
+          .where('originalNoteId', '==', noteId)
+          .get()
+          .then((querySnapshot) => {
+            querySnapshot.forEach((doc) => {
+              doc.ref.delete();
+            });
+          });
+        
+        loadNotes();
+        getTasks();
+      })
+      .catch(error => console.error("Error deleting note: ", error));
+  }
+
+  function addJournalEntry() {
+    const newEntryText = document.getElementById('newEntryText');
+    const text = newEntryText.value.trim();
+    
+    if (text !== '') {
+      db.collection('journal').add({
+        text: text,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(() => {
+        newEntryText.value = '';
+        loadJournalEntries();
+      }).catch(error => console.error("Error adding journal entry: ", error));
+    }
+  }
+
+  function loadJournalEntries() {
+    const journalEntries = document.getElementById('journalEntries');
+    journalEntries.innerHTML = '';
+    
+    db.collection('journal')
+      .orderBy('timestamp', 'desc')
+      .get()
+      .then((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+          const entryElement = document.createElement('li');
+          entryElement.classList.add('journal-entry');
+          entryElement.textContent = doc.data().text;
+          journalEntries.appendChild(entryElement);
+        });
+      });
+  }
+
+  function addTask() {
+    const taskInput = document.getElementById('taskInput');
+    const taskDateInput = document.getElementById('taskDate');
+    const taskText = taskInput.value.trim();
+    const taskDate = taskDateInput.value;
+
+    if (taskText !== '') {
+      db.collection('tasks').add({
+        text: `📝 Tarea: ${taskText}`,
+        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+        isReminder: false,
+        dueDate: taskDate ? new Date(taskDate).toISOString() : null
+      }).then(() => {
+        taskInput.value = '';
+        taskDateInput.value = '';
+        getTasks();
+      }).catch(error => console.error("Error adding task: ", error));
+    }
+  }
+
+  function getTasks() {
+    const taskListItems = document.getElementById('taskListItems');
+    taskListItems.innerHTML = '';
+    
+    db.collection("tasks")
+      .orderBy('timestamp', 'desc')
+      .get().then((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+          const taskData = doc.data();
+          const listItem = document.createElement('li');
+          listItem.classList.add('task-item');
+          
+          const formattedDate = taskData.dueDate 
+            ? new Date(taskData.dueDate).toLocaleString() 
+            : 'Sin fecha';
+          
+          listItem.innerHTML = `
+            <div class="task-details">
+              <div>
+                <span>${taskData.text}</span>
+                <br>
+                <small>Fecha límite: ${formattedDate}</small>
+              </div>
+              <button class="delete-btn" onclick="deleteTask('${doc.id}')">Eliminar</button>
+            </div>
+          `;
+          taskListItems.appendChild(listItem);
+
+          // Check for notifications
+          if (taskData.dueDate) {
+            checkTaskNotification(doc.id, taskData);
+          }
+        });
+      });
+  }
+
+  function checkTaskNotification(taskId, taskData) {
+    const dueDate = new Date(taskData.dueDate);
+    const now = new Date();
+    
+    // Check if the task is due within the next hour
+    const oneHourFromNow = new Date(now.getTime() + 60 * 60 * 1000);
+    
+    if (dueDate <= oneHourFromNow && dueDate > now) {
+      if ('Notification' in window) {
+        Notification.requestPermission().then(function (permission) {
+          if (permission === 'granted') {
+            new Notification('Tarea Próxima', {
+              body: taskData.text,
+              tag: taskId
+            });
+          }
+        });
+      }
+    }
+  }
+
+  function deleteTask(taskId) {
+    db.collection("tasks").doc(taskId).delete()
+      .then(() => {
+        getTasks();
+      }).catch((error) => {
+        console.error("Error al eliminar tarea: ", error);
+      });
+  }
+
+  // Request notification permission on page load
+  if ('Notification' in window) {
+    Notification.requestPermission();
+  }
+
+  // Initial load of tasks and notes
+  getTasks();
+  loadNotes();
+</script>
+</body>
+</html>
